@@ -49,6 +49,39 @@ export const query = async (sql, params = []) => {
   return fallbackQueryHandler(sql, params);
 };
 
+/**
+ * Execute operations within a database transaction
+ * @param {Function} callback - Async function receiving { execute: (sql, params) => Promise<results> }
+ */
+export const withTransaction = async (callback) => {
+  if (isMysqlActive && pool) {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const tx = {
+        execute: async (sql, params = []) => {
+          const [results] = await connection.execute(sql, params);
+          return results;
+        }
+      };
+      const result = await callback(tx);
+      await connection.commit();
+      return result;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  }
+
+  // In-Memory Transaction Emulation
+  const tx = {
+    execute: async (sql, params = []) => fallbackQueryHandler(sql, params)
+  };
+  return await callback(tx);
+};
+
 export const getIsMysqlActive = () => isMysqlActive;
 export const getPool = () => pool;
 
@@ -86,10 +119,13 @@ export const inMemoryDB = {
     { id: 43, asset_tag: 'EQ-SOFT-001', name: 'MATLAB Academic Campus 100-Seat Floating Licence', category_id: 6, lab_id: 1, serial_no: 'LIC-MATLAB-2024', purchase_date: '2024-01-01', status: 'available', description: 'Concurrent network licence with Simulink toolboxes.' }
   ],
   allocations: [
-    { id: 1, equipment_id: 3, user_id: 3, allocated_on: '2024-09-15 10:00:00', due_date: '2024-10-15 17:00:00', returned_on: null, purpose: 'Deep Learning Computer Vision Semester Project' }
+    { id: 1, equipment_id: 3, user_id: 3, allocated_on: '2024-09-15 10:00:00', due_date: '2024-10-15 17:00:00', returned_on: null, purpose: 'Deep Learning Computer Vision Semester Project' },
+    { id: 2, equipment_id: 1, user_id: 3, allocated_on: '2024-08-01 09:00:00', due_date: '2024-08-20 17:00:00', returned_on: '2024-08-19 16:30:00', purpose: 'Benchmarking Experiment' },
+    { id: 6, equipment_id: 10, user_id: 3, allocated_on: '2024-08-10 09:00:00', due_date: '2024-09-01 17:00:00', returned_on: null, purpose: 'Overdue Routing Sandbox Project' }
   ],
   maintenance: [
-    { id: 1, equipment_id: 10, reported_by: 2, issue_description: 'Ethernet Ports 4 and 7 fail link negotiation.', severity: 'medium', status: 'in_progress', reported_on: '2024-09-28 14:15:00', resolved_on: null, technician_notes: 'Replacement module on order.' }
+    { id: 1, equipment_id: 10, reported_by: 2, issue_description: 'Ethernet Ports 4 and 7 fail link negotiation.', severity: 'medium', status: 'in_progress', reported_on: '2024-09-28 14:15:00', resolved_on: null, technician_notes: 'Replacement module on order.' },
+    { id: 2, equipment_id: 17, reported_by: 2, issue_description: 'Channel 1 DC offset drift (+1.2%) observed.', severity: 'low', status: 'resolved', reported_on: '2024-08-10 09:00:00', resolved_on: '2024-08-10 15:30:00', technician_notes: 'Recalibrated DAC reference.' }
   ]
 };
 
@@ -98,7 +134,10 @@ function fallbackQueryHandler(sql, params) {
 
   // Categories
   if (clean.includes('from categories')) {
-    return inMemoryDB.categories;
+    return inMemoryDB.categories.map(cat => ({
+      ...cat,
+      equipment_count: inMemoryDB.equipment.filter(e => e.category_id === cat.id).length
+    }));
   }
 
   // Laboratories
@@ -109,12 +148,17 @@ function fallbackQueryHandler(sql, params) {
     }
     return inMemoryDB.laboratories.map(lab => {
       const incharge = inMemoryDB.users.find(u => u.id === lab.incharge_id);
-      const eqCount = inMemoryDB.equipment.filter(e => e.lab_id === lab.id).length;
+      const labEquipment = inMemoryDB.equipment.filter(e => e.lab_id === lab.id);
       return {
         ...lab,
         incharge_name: incharge ? incharge.name : 'Unassigned',
         incharge_email: incharge ? incharge.email : '',
-        total_equipment: eqCount
+        total_equipment: labEquipment.length,
+        available_count: labEquipment.filter(e => e.status === 'available').length,
+        allocated_count: labEquipment.filter(e => e.status === 'allocated').length,
+        maintenance_count: labEquipment.filter(e => e.status === 'under_maintenance').length,
+        damaged_count: labEquipment.filter(e => e.status === 'damaged').length,
+        retired_count: labEquipment.filter(e => e.status === 'retired').length
       };
     });
   }
@@ -144,12 +188,15 @@ function fallbackQueryHandler(sql, params) {
     return inMemoryDB.allocations.map(a => {
       const eq = inMemoryDB.equipment.find(e => e.id === a.equipment_id);
       const user = inMemoryDB.users.find(u => u.id === a.user_id);
+      const lab = eq ? inMemoryDB.laboratories.find(l => l.id === eq.lab_id) : null;
       return {
         ...a,
         equipment_name: eq ? eq.name : '',
         asset_tag: eq ? eq.asset_tag : '',
         user_name: user ? user.name : '',
-        user_email: user ? user.email : ''
+        user_email: user ? user.email : '',
+        user_role: user ? user.role : 'student',
+        lab_name: lab ? lab.name : ''
       };
     });
   }
@@ -159,11 +206,13 @@ function fallbackQueryHandler(sql, params) {
     return inMemoryDB.maintenance.map(m => {
       const eq = inMemoryDB.equipment.find(e => e.id === m.equipment_id);
       const user = inMemoryDB.users.find(u => u.id === m.reported_by);
+      const lab = eq ? inMemoryDB.laboratories.find(l => l.id === eq.lab_id) : null;
       return {
         ...m,
         equipment_name: eq ? eq.name : '',
         asset_tag: eq ? eq.asset_tag : '',
-        reported_by_name: user ? user.name : ''
+        lab_name: lab ? lab.name : '',
+        reporter_name: user ? user.name : 'Staff'
       };
     });
   }
@@ -176,4 +225,4 @@ function fallbackQueryHandler(sql, params) {
   return [];
 }
 
-export default { query, initPool, getIsMysqlActive, getPool };
+export default { query, withTransaction, initPool, getIsMysqlActive, getPool };

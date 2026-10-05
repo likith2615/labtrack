@@ -3,38 +3,95 @@ import { body, param, query } from 'express-validator';
 import validateRequest from '../middleware/validateRequest.js';
 import {
   getAllMaintenance,
-  createMaintenanceTicket,
+  reportDamage,
   updateMaintenanceStatus
 } from '../controllers/maintenanceController.js';
 
 const router = express.Router();
 
-// GET /api/maintenance
-router.get('/', getAllMaintenance);
+const validStatuses = ['reported', 'in_progress', 'resolved'];
+const validSeverities = ['low', 'medium', 'high'];
 
-// POST /api/maintenance
+// GET /api/maintenance (filter by status)
+router.get(
+  '/',
+  [
+    query('status').optional().isIn([...validStatuses, 'all']).withMessage(`status must be one of: ${validStatuses.join(', ')}, all`),
+    query('severity').optional().isIn([...validSeverities, 'all']).withMessage(`severity must be one of: ${validSeverities.join(', ')}, all`),
+    query('equipment_id').optional().isInt({ min: 1 }).withMessage('equipment_id must be a positive integer')
+  ],
+  validateRequest,
+  getAllMaintenance
+);
+
+// POST /api/maintenance/report
+router.post(
+  '/report',
+  [
+    body('equipment_id')
+      .notEmpty().withMessage('equipment_id is required')
+      .isInt({ min: 1 }).withMessage('equipment_id must be a positive integer corresponding to an equipment item'),
+    body('reported_by')
+      .optional({ nullable: true })
+      .isInt({ min: 1 }).withMessage('reported_by must be a valid user ID'),
+    body('issue_description')
+      .trim()
+      .notEmpty().withMessage('issue_description is required')
+      .isLength({ min: 5 }).withMessage('issue_description must be at least 5 characters long'),
+    body('severity')
+      .optional()
+      .isIn(validSeverities).withMessage(`severity must be one of: ${validSeverities.join(', ')}`),
+    body('technician_notes')
+      .optional({ nullable: true })
+      .isString().withMessage('technician_notes must be a string')
+  ],
+  validateRequest,
+  reportDamage
+);
+
+// POST /api/maintenance (alias for reporting damage)
 router.post(
   '/',
   [
-    body('equipment_id').isInt({ min: 1 }).withMessage('Valid equipment_id is required'),
-    body('issue_description').trim().isLength({ min: 5 }).withMessage('Issue description must be at least 5 characters'),
+    body('equipment_id')
+      .notEmpty().withMessage('equipment_id is required')
+      .isInt({ min: 1 }).withMessage('equipment_id must be a positive integer corresponding to an equipment item'),
+    body('issue_description')
+      .trim()
+      .notEmpty().withMessage('issue_description is required')
+      .isLength({ min: 5 }).withMessage('issue_description must be at least 5 characters long'),
     body('severity')
       .optional()
-      .isIn(['low', 'medium', 'high'])
-      .withMessage('Severity must be low, medium, or high')
+      .isIn(validSeverities).withMessage(`severity must be one of: ${validSeverities.join(', ')}`)
   ],
   validateRequest,
-  createMaintenanceTicket
+  reportDamage
 );
 
-// PATCH /api/maintenance/:id/status
+// PUT /api/maintenance/:id/status
+router.put(
+  '/:id/status',
+  [
+    param('id').isInt({ min: 1 }).withMessage('Maintenance ticket ID must be a positive integer'),
+    body('status')
+      .notEmpty().withMessage('status is required')
+      .isIn(validStatuses).withMessage(`status must be one of: ${validStatuses.join(', ')}`),
+    body('technician_notes')
+      .optional({ nullable: true })
+      .isString().withMessage('technician_notes must be a string')
+  ],
+  validateRequest,
+  updateMaintenanceStatus
+);
+
+// PATCH /api/maintenance/:id/status (for compatibility)
 router.patch(
   '/:id/status',
   [
-    param('id').isInt().withMessage('Maintenance ticket ID must be an integer'),
+    param('id').isInt({ min: 1 }).withMessage('Maintenance ticket ID must be a positive integer'),
     body('status')
-      .isIn(['reported', 'in_progress', 'resolved'])
-      .withMessage('Status must be reported, in_progress, or resolved')
+      .notEmpty().withMessage('status is required')
+      .isIn(validStatuses).withMessage(`status must be one of: ${validStatuses.join(', ')}`)
   ],
   validateRequest,
   updateMaintenanceStatus
