@@ -2,13 +2,25 @@ import asyncHandler from '../middleware/asyncHandler.js';
 import { query, getIsMysqlActive, inMemoryDB } from '../config/db.js';
 
 /**
- * @desc   Get all equipment categories
+ * @desc   Get all equipment categories (for dropdowns and listings)
  * @route  GET /api/categories
  * @access Public
  */
 export const getAllCategories = asyncHandler(async (req, res) => {
   if (getIsMysqlActive()) {
-    const results = await query('SELECT * FROM categories ORDER BY name ASC');
+    const sql = `
+      SELECT 
+        c.id, 
+        c.name, 
+        c.description, 
+        c.created_at,
+        COUNT(e.id) AS equipment_count
+      FROM categories c
+      LEFT JOIN equipment e ON c.id = e.category_id
+      GROUP BY c.id, c.name, c.description, c.created_at
+      ORDER BY c.name ASC
+    `;
+    const results = await query(sql);
     return res.status(200).json({
       success: true,
       message: `Retrieved ${results.length} equipment categories.`,
@@ -17,10 +29,15 @@ export const getAllCategories = asyncHandler(async (req, res) => {
     });
   }
 
+  const categoriesWithCounts = inMemoryDB.categories.map(cat => ({
+    ...cat,
+    equipment_count: inMemoryDB.equipment.filter(e => e.category_id === cat.id).length
+  }));
+
   res.status(200).json({
     success: true,
-    message: `Retrieved ${inMemoryDB.categories.length} equipment categories.`,
-    data: inMemoryDB.categories,
+    message: `Retrieved ${categoriesWithCounts.length} equipment categories.`,
+    data: categoriesWithCounts,
     errors: null
   });
 });

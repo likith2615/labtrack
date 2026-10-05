@@ -2,7 +2,7 @@ import asyncHandler from '../middleware/asyncHandler.js';
 import { query, getIsMysqlActive, inMemoryDB } from '../config/db.js';
 
 /**
- * @desc   Get all laboratories with assigned equipment count
+ * @desc   Get all laboratories with assigned equipment count (for dropdowns and overview)
  * @route  GET /api/labs
  * @access Public
  */
@@ -10,7 +10,11 @@ export const getAllLabs = asyncHandler(async (req, res) => {
   if (getIsMysqlActive()) {
     const sql = `
       SELECT 
-        l.id, l.name, l.location, l.incharge_id, l.created_at,
+        l.id, 
+        l.name, 
+        l.location, 
+        l.incharge_id, 
+        l.created_at,
         u.name AS incharge_name,
         u.email AS incharge_email,
         COUNT(e.id) AS total_equipment,
@@ -60,7 +64,7 @@ export const getAllLabs = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc   Get single laboratory by ID with inventory list
+ * @desc   Get single laboratory by ID with full inventory list
  * @route  GET /api/labs/:id
  * @access Public
  */
@@ -85,7 +89,11 @@ export const getLabById = asyncHandler(async (req, res) => {
     }
 
     const equipment = await query(
-      'SELECT e.*, c.name AS category_name FROM equipment e JOIN categories c ON e.category_id = c.id WHERE e.lab_id = ? ORDER BY e.name ASC',
+      `SELECT e.*, c.name AS category_name 
+       FROM equipment e 
+       JOIN categories c ON e.category_id = c.id 
+       WHERE e.lab_id = ? 
+       ORDER BY e.name ASC`,
       [Number(id)]
     );
 
@@ -139,13 +147,24 @@ export const createLab = asyncHandler(async (req, res) => {
   const { name, location, incharge_id } = req.body;
 
   if (getIsMysqlActive()) {
+    if (incharge_id) {
+      const userCheck = await query('SELECT id FROM users WHERE id = ?', [Number(incharge_id)]);
+      if (!userCheck || userCheck.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: `In-charge user ID ${incharge_id} does not exist.`,
+          errors: [{ field: 'incharge_id', message: 'Assigned incharge_id must reference a valid user.' }]
+        });
+      }
+    }
+
     const insertSql = 'INSERT INTO laboratories (name, location, incharge_id) VALUES (?, ?, ?)';
-    const result = await query(insertSql, [name, location, incharge_id ? Number(incharge_id) : null]);
+    const result = await query(insertSql, [name.trim(), location.trim(), incharge_id ? Number(incharge_id) : null]);
 
     return res.status(201).json({
       success: true,
       message: 'Laboratory facility registered successfully.',
-      data: { id: result.insertId, name, location, incharge_id },
+      data: { id: result.insertId, name: name.trim(), location: location.trim(), incharge_id: incharge_id ? Number(incharge_id) : null },
       errors: null
     });
   }
@@ -153,8 +172,8 @@ export const createLab = asyncHandler(async (req, res) => {
   const newId = inMemoryDB.laboratories.length > 0 ? Math.max(...inMemoryDB.laboratories.map(l => l.id)) + 1 : 1;
   const newLab = {
     id: newId,
-    name,
-    location,
+    name: name.trim(),
+    location: location.trim(),
     incharge_id: incharge_id ? Number(incharge_id) : null
   };
 

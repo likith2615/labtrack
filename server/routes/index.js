@@ -5,6 +5,7 @@ import labsRoutes from './labsRoutes.js';
 import categoriesRoutes from './categoriesRoutes.js';
 import allocationsRoutes from './allocationsRoutes.js';
 import maintenanceRoutes from './maintenanceRoutes.js';
+import activityRoutes from './activityRoutes.js';
 
 const router = express.Router();
 
@@ -14,5 +15,6 @@ router.use('/labs', labsRoutes);
 router.use('/categories', categoriesRoutes);
 router.use('/allocations', allocationsRoutes);
 router.use('/maintenance', maintenanceRoutes);
+router.use('/activity', activityRoutes);
 
 export default router;
