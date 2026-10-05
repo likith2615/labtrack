@@ -6,6 +6,7 @@ import EquipmentList from './pages/EquipmentList';
 import EquipmentDetail from './pages/EquipmentDetail';
 import LabOverview from './pages/LabOverview';
 import MaintenanceLogs from './pages/MaintenanceLogs';
+import DesignPreview from './pages/DesignPreview';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/equipment/:id" element={<EquipmentDetail />} />
           <Route path="/labs" element={<LabOverview />} />
           <Route path="/maintenance" element={<MaintenanceLogs />} />
+          <Route path="/design-preview" element={<DesignPreview />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

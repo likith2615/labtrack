@@ -1,29 +1,47 @@
 import axios from 'axios';
 
+// Create Central Axios Instance
 const api = axios.create({
   baseURL: '/api',
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 10000
+  timeout: 15000
 });
 
-// Response Interceptor for standard error formatting
+// Request Interceptor
+api.interceptors.request.use(
+  (config) => {
+    // Attach authorization token if present in localStorage
+    const token = localStorage.getItem('labtrack_auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response Interceptor for Consistent Error and Payload Extraction
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    const errorResponse = error.response?.data?.error || {
-      message: error.message || 'Network communication failure with LabTrack server.'
+    const errorPayload = error.response?.data || {
+      success: false,
+      message: error.message || 'Network communication failure with LabTrack server.',
+      errors: null
     };
-    return Promise.reject(errorResponse);
+    return Promise.reject(errorPayload);
   }
 );
 
+// Domain API Services
 export const equipmentApi = {
   getAll: (params) => api.get('/equipment', { params }),
   getById: (id) => api.get(`/equipment/${id}`),
   create: (data) => api.post('/equipment', data),
-  updateStatus: (id, status, note) => api.patch(`/equipment/${id}/status`, { status, note }),
+  update: (id, data) => api.put(`/equipment/${id}`, data),
+  updateStatus: (id, status) => api.patch(`/equipment/${id}/status`, { status }),
   delete: (id) => api.delete(`/equipment/${id}`)
 };
 
@@ -37,9 +55,20 @@ export const categoriesApi = {
   getAll: () => api.get('/categories')
 };
 
+export const allocationsApi = {
+  getAll: (params) => api.get('/allocations', { params }),
+  create: (data) => api.post('/allocations', data),
+  returnItem: (id) => api.put(`/allocations/${id}/return`)
+};
+
 export const maintenanceApi = {
   getAll: (params) => api.get('/maintenance', { params }),
-  create: (data) => api.post('/maintenance', data)
+  report: (data) => api.post('/maintenance/report', data),
+  updateStatus: (id, status, notes) => api.put(`/maintenance/${id}/status`, { status, technician_notes: notes })
+};
+
+export const reportsApi = {
+  getSummary: () => api.get('/reports/summary')
 };
 
 export const activityApi = {

@@ -1,0 +1,101 @@
+/* ==========================================================================
+   LABTRACK DESIGN SYSTEM TOKENS — TECHNICAL INSTRUMENT PANEL / LAB NOTEBOOK
+   ========================================================================== */
+
+:root {
+  /* Surface & Canvas Spectrum (Warm Lab Notebook Paper) */
+  --color-canvas: #F4F1EA;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #ECE7DE;
+  --color-surface-muted: #E2DBD0;
+  --color-surface-dark: #16181D;
+
+  /* Ink & Typography Palette */
+  --color-text-primary: #16181D;
+  --color-text-secondary: #4A505C;
+  --color-text-muted: #7E8594;
+  --color-text-inverse: #F4F1EA;
+
+  /* Borders & Technical Dividers */
+  --color-border-default: #D8D2C5;
+  --color-border-subtle: #E8E3DA;
+  --color-border-strong: #16181D;
+  --color-border-dark: #2B2F38;
+
+  /* Accent: Signal Orange */
+  --color-accent-orange: #FF5A1F;
+  --color-accent-orange-hover: #E04810;
+  --color-accent-orange-subtle: #FFF1EC;
+  --color-accent-orange-border: #FFCDBA;
+
+  /* Strict Status Tokens (Used ONLY for status indicators) */
+  --color-status-available: #1B873F;
+  --color-status-available-bg: #EBF7EE;
+  --color-status-available-border: #A7E3B7;
+
+  --color-status-allocated: #D97706;
+  --color-status-allocated-bg: #FEF3C7;
+  --color-status-allocated-border: #FCD34D;
+
+  --color-status-maintenance: #2563EB;
+  --color-status-maintenance-bg: #EFF6FF;
+  --color-status-maintenance-border: #BFDBFE;
+
+  --color-status-damaged: #DC2626;
+  --color-status-damaged-bg: #FEE2E2;
+  --color-status-damaged-border: #FCA5A5;
+
+  --color-status-retired: #4B5563;
+  --color-status-retired-bg: #F3F4F6;
+  --color-status-retired-border: #D1D5DB;
+
+  /* Typography Stack */
+  --font-display: 'Bricolage Grotesque', 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Type Scale */
+  --text-xs: 0.725rem;
+  --text-sm: 0.8rem;
+  --text-base: 0.875rem;
+  --text-md: 0.95rem;
+  --text-lg: 1.15rem;
+  --text-xl: 1.45rem;
+  --text-2xl: 1.85rem;
+  --text-3xl: 2.25rem;
+
+  /* Spacing Scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Elevation / Shadows (Technical edge over diffuse blur) */
+  --shadow-none: none;
+  --shadow-sm: 0 1px 2px rgba(22, 24, 29, 0.05);
+  --shadow-md: 0 2px 6px rgba(22, 24, 29, 0.08), 0 1px 2px rgba(22, 24, 29, 0.04);
+  --shadow-panel: 0 4px 20px rgba(22, 24, 29, 0.12);
+  --shadow-hard: 3px 3px 0px var(--color-border-strong);
+
+  /* Radii (Technical instrument square-ish corners, 4px max) */
+  --radius-none: 0px;
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+
+  /* Animation Tokens */
+  --ease-technical: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+
+  /* Layout Dimensions */
+  --sidebar-width-expanded: 256px;
+  --sidebar-width-collapsed: 68px;
+  --header-height: 56px;
+}
