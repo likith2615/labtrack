@@ -6,72 +6,127 @@
 CREATE DATABASE IF NOT EXISTS labtrack_db;
 USE labtrack_db;
 
--- 1. Labs Table
-CREATE TABLE IF NOT EXISTS labs (
+-- -----------------------------------------------------------------------------
+-- 1. Table: users
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
-  code VARCHAR(20) UNIQUE NOT NULL,
-  department VARCHAR(100) NOT NULL,
-  location VARCHAR(100) NOT NULL,
-  in_charge VARCHAR(100) NOT NULL,
-  contact_email VARCHAR(100),
-  capacity INT DEFAULT 30,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  email VARCHAR(120) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('admin', 'staff', 'student') NOT NULL DEFAULT 'student',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_users_email (email),
+  INDEX idx_users_role (role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. Equipment Categories Table
+-- -----------------------------------------------------------------------------
+-- 2. Table: laboratories
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS laboratories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  location VARCHAR(120) NOT NULL,
+  incharge_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_labs_incharge
+    FOREIGN KEY (incharge_id) REFERENCES users(id)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  INDEX idx_labs_incharge (incharge_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 3. Table: categories
+-- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS categories (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  code VARCHAR(20) UNIQUE NOT NULL,
-  description TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  name VARCHAR(100) NOT NULL UNIQUE,
+  description TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_categories_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. Equipment Table
+-- -----------------------------------------------------------------------------
+-- 4. Table: equipment
+-- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS equipment (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  asset_tag VARCHAR(50) UNIQUE NOT NULL,
+  asset_tag VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(150) NOT NULL,
-  model_number VARCHAR(100) NOT NULL,
-  manufacturer VARCHAR(100) NOT NULL,
-  serial_number VARCHAR(100) NOT NULL,
   category_id INT NOT NULL,
   lab_id INT NOT NULL,
-  status ENUM('available', 'in_use', 'damaged', 'retired') DEFAULT 'available',
-  purchase_date DATE,
-  warranty_expiry DATE,
-  last_serviced DATE,
-  next_service_due DATE,
-  specifications JSON,
-  notes TEXT,
+  serial_no VARCHAR(100) NOT NULL,
+  purchase_date DATE NOT NULL,
+  status ENUM('available', 'allocated', 'under_maintenance', 'damaged', 'retired') NOT NULL DEFAULT 'available',
+  description TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
-  FOREIGN KEY (lab_id) REFERENCES labs(id) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  CONSTRAINT fk_equipment_category
+    FOREIGN KEY (category_id) REFERENCES categories(id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_equipment_lab
+    FOREIGN KEY (lab_id) REFERENCES laboratories(id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  INDEX idx_equipment_asset_tag (asset_tag),
+  INDEX idx_equipment_status (status),
+  INDEX idx_equipment_category (category_id),
+  INDEX idx_equipment_lab (lab_id),
+  INDEX idx_equipment_serial (serial_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. Maintenance Logs Table
-CREATE TABLE IF NOT EXISTS maintenance_logs (
+-- -----------------------------------------------------------------------------
+-- 5. Table: allocations
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS allocations (
   id INT AUTO_INCREMENT PRIMARY KEY,
   equipment_id INT NOT NULL,
-  service_type ENUM('routine_calibration', 'repair', 'inspection', 'emergency_fix') NOT NULL,
-  service_date DATE NOT NULL,
-  technician_name VARCHAR(100) NOT NULL,
-  cost DECIMAL(10, 2) DEFAULT 0.00,
-  findings TEXT NOT NULL,
-  action_taken TEXT NOT NULL,
-  status_after_service ENUM('available', 'in_use', 'damaged', 'retired') DEFAULT 'available',
+  user_id INT NOT NULL,
+  allocated_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  due_date DATETIME NOT NULL,
+  returned_on DATETIME NULL,
+  purpose VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (equipment_id) REFERENCES equipment(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  CONSTRAINT fk_allocations_equipment
+    FOREIGN KEY (equipment_id) REFERENCES equipment(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_allocations_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  INDEX idx_allocations_equipment (equipment_id),
+  INDEX idx_allocations_user (user_id),
+  INDEX idx_allocations_due_date (due_date),
+  INDEX idx_allocations_returned (returned_on)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. Activity Logs Table
-CREATE TABLE IF NOT EXISTS activity_logs (
+-- -----------------------------------------------------------------------------
+-- 6. Table: maintenance
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS maintenance (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  action VARCHAR(100) NOT NULL,
-  entity_type VARCHAR(50) NOT NULL,
-  entity_id INT,
-  details TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  equipment_id INT NOT NULL,
+  reported_by INT NULL,
+  issue_description TEXT NOT NULL,
+  severity ENUM('low', 'medium', 'high') NOT NULL DEFAULT 'medium',
+  status ENUM('reported', 'in_progress', 'resolved') NOT NULL DEFAULT 'reported',
+  reported_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_on DATETIME NULL,
+  technician_notes TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_maintenance_equipment
+    FOREIGN KEY (equipment_id) REFERENCES equipment(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_maintenance_user
+    FOREIGN KEY (reported_by) REFERENCES users(id)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  INDEX idx_maintenance_equipment (equipment_id),
+  INDEX idx_maintenance_reported_by (reported_by),
+  INDEX idx_maintenance_status (status),
+  INDEX idx_maintenance_severity (severity)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
