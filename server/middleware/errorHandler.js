@@ -1,31 +1,24 @@
-// Central error-handling middleware for LabTrack Express API
-
-export const notFoundHandler = (req, res, next) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      code: 'NOT_FOUND',
-      message: `The requested endpoint ${req.method} ${req.originalUrl} was not found on this server.`
-    }
+/**
+ * Central Error Handler Middleware
+ * Returns consistent JSON: { success: false, message: string, errors: array | null }
+ */
+export const errorHandler = (err, req, res, next) => {
+  console.error('[API Error]', {
+    message: err.message,
+    stack: process.env.NODE_ENV === 'production' ? undefined : err.stack,
+    path: req.originalUrl,
+    method: req.method
   });
-};
 
-export const centralErrorHandler = (err, req, res, next) => {
-  console.error('[API Server Error]', err);
-
-  const statusCode = err.statusCode || (err.status ? Number(err.status) : 500);
-  const errorCode = err.code || 'INTERNAL_SERVER_ERROR';
-  const errorMessage = err.message || 'An unexpected error occurred processing the request.';
+  const statusCode = err.statusCode || (err.status && !isNaN(err.status) ? Number(err.status) : 500);
+  const message = err.message || 'An unexpected internal server error occurred.';
+  const errors = err.errors || null;
 
   res.status(statusCode).json({
     success: false,
-    error: {
-      code: errorCode,
-      message: errorMessage,
-      details: err.details || null,
-      timestamp: new Date().toISOString()
-    }
+    message,
+    errors
   });
 };
 
-export default { notFoundHandler, centralErrorHandler };
+export default errorHandler;
