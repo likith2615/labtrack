@@ -1,3 +1,4 @@
+-- database: :memory:
 -- LabTrack Database Schema
 -- College Laboratory Equipment Management System
 

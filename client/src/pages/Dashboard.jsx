@@ -1,392 +1,542 @@
-import React, { useState, useEffect } from 'react';
-import { useOutletContext, useNavigate, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { 
-  Layers, 
-  CheckCircle2, 
-  Clock, 
-  AlertTriangle, 
-  Wrench, 
-  Building2, 
-  ArrowRight, 
-  Plus, 
-  Activity, 
-  ShieldAlert,
-  Cpu
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Layers,
+  Plus,
+  RefreshCw,
+  Clock,
+  Wrench,
+  AlertTriangle,
+  Building2,
+  ShieldCheck,
+  Activity,
+  Edit,
+  Trash2,
+  ExternalLink,
+  SlidersHorizontal,
+  Eye,
+  CheckCircle2,
+  Search
 } from 'lucide-react';
-import { equipmentApi, labsApi, maintenanceApi, activityApi } from '../api/client';
-import StatCounter from '../components/common/StatCounter';
-import StatusBadge from '../components/common/StatusBadge';
-import SkeletonLoader from '../components/common/SkeletonLoader';
-import MaintenanceModal from '../components/maintenance/MaintenanceModal';
+
+import {
+  equipmentApi,
+  labsApi,
+  categoriesApi,
+  maintenanceApi,
+  allocationsApi,
+  reportsApi
+} from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/ui/Toast';
+import ProtectedRoute from '../components/auth/ProtectedRoute';
+
+import KPIStrip from '../components/dashboard/KPIStrip';
+import DashboardCharts from '../components/dashboard/DashboardCharts';
+import OverdueTable from '../components/dashboard/OverdueTable';
+import MaintenanceQueue from '../components/dashboard/MaintenanceQueue';
+import AllocationsPanel from '../components/dashboard/AllocationsPanel';
+import EquipmentFormModal from '../components/dashboard/EquipmentFormModal';
+import DeleteConfirmModal from '../components/dashboard/DeleteConfirmModal';
+
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Skeleton from '../components/ui/Skeleton';
 
 export default function Dashboard() {
-  const { refreshTrigger, triggerRefresh } = useOutletContext();
-  const [equipment, setEquipment] = useState([]);
-  const [labs, setLabs] = useState([]);
-  const [recentMaintenance, setRecentMaintenance] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
+  const { currentUser, isAdmin } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
+  // Primary Data States
+  const [loading, setLoading] = useState(true);
+  const [equipment, setEquipment] = useState([]);
+  const [labs, setLabs] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [maintenanceTickets, setMaintenanceTickets] = useState([]);
+  const [allocations, setAllocations] = useState([]);
+  const [reportsData, setReportsData] = useState(null);
+
+  // Search & Filter for Equipment Management Grid
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerLabFilter, setLedgerLabFilter] = useState('all');
+
+  // Modal States
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [deleteModalItem, setDeleteModalItem] = useState(null);
+
+  // Active Dashboard Section Tabs
+  const [activeSection, setActiveSection] = useState('overview'); // 'overview' | 'allocations' | 'maintenance' | 'inventory'
+
+  // Fetch all dashboard data from API
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
-    Promise.all([
-      equipmentApi.getAll(),
-      labsApi.getAll(),
-      maintenanceApi.getAll(),
-      activityApi.getAll({ limit: 6 })
-    ])
-      .then(([eqRes, labsRes, maintRes, actRes]) => {
-        setEquipment(eqRes.data || []);
-        setLabs(labsRes.data || []);
-        setRecentMaintenance(maintRes.data || []);
-        setActivities(actRes.data || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Dashboard data load error:', err);
-        setLoading(false);
-      });
-  }, [refreshTrigger]);
+    try {
+      const [
+        eqRes,
+        labsRes,
+        catsRes,
+        maintRes,
+        allocRes,
+        reportsRes
+      ] = await Promise.all([
+        equipmentApi.getAll({ limit: 100 }),
+        labsApi.getAll(),
+        categoriesApi.getAll(),
+        maintenanceApi.getAll(),
+        allocationsApi.getAll(),
+        reportsApi.getSummary()
+      ]);
 
+      setEquipment(eqRes.data || []);
+      setLabs(labsRes.data || []);
+      setCategories(catsRes.data || []);
+      setMaintenanceTickets(maintRes.data || []);
+      setAllocations(allocRes.data || []);
+      setReportsData(reportsRes.data || null);
+    } catch (err) {
+      console.error('Failed to load dashboard telemetry:', err);
+      toast.error('Failed to load real-time telemetry from backend API.', 'Connection Failure');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Compute KPI Counts
   const totalCount = equipment.length;
-  const availableCount = equipment.filter(e => e.status === 'available').length;
-  const inUseCount = equipment.filter(e => e.status === 'in_use').length;
-  const damagedCount = equipment.filter(e => e.status === 'damaged').length;
-  const retiredCount = equipment.filter(e => e.status === 'retired').length;
+  const availableCount = equipment.filter((e) => e.status === 'available').length;
+  const allocatedCount = equipment.filter((e) => e.status === 'allocated' || e.status === 'in_use').length;
+  const damagedCount = equipment.filter((e) => e.status === 'damaged').length;
+  const maintenanceCount = maintenanceTickets.filter((m) => m.status !== 'resolved').length;
 
-  const operationalCount = availableCount + inUseCount;
-  const healthRate = totalCount > 0 ? Math.round((operationalCount / totalCount) * 100) : 100;
+  // Available equipment items for new checkouts
+  const availableEquipment = equipment.filter((e) => e.status === 'available');
 
-  // Equipment requiring attention (damaged or past due service)
-  const alertEquipment = equipment.filter(e => e.status === 'damaged');
+  // Overdue allocations from reports summary or calculated from allocations
+  const overdueItems = reportsData?.overdueAllocations?.items || allocations.filter((a) => a.returned_on === null && new Date(a.due_date) < new Date()).map((a) => {
+    const eq = equipment.find((e) => e.id === a.equipment_id);
+    const lab = eq ? labs.find((l) => l.id === eq.lab_id) : null;
+    const daysOverdue = Math.max(0, Math.floor((Date.now() - new Date(a.due_date).getTime()) / (1000 * 60 * 60 * 24)));
+    return {
+      allocation_id: a.id,
+      equipment_id: a.equipment_id,
+      asset_tag: eq ? eq.asset_tag : `EQ-#${a.equipment_id}`,
+      equipment_name: eq ? eq.name : a.equipment_name || 'Hardware Asset',
+      borrower_name: a.user_name || 'Borrower',
+      borrower_email: a.user_email || '',
+      borrower_role: a.user_role || 'student',
+      lab_name: lab ? lab.name : a.lab_name || 'Laboratory',
+      allocated_on: a.allocated_on,
+      due_date: a.due_date,
+      days_overdue: daysOverdue,
+      purpose: a.purpose
+    };
+  });
+
+  // Filtered Equipment Ledger for direct admin management
+  const filteredEquipment = equipment.filter((item) => {
+    if (ledgerLabFilter !== 'all' && item.lab_id !== Number(ledgerLabFilter)) {
+      return false;
+    }
+    if (ledgerSearch.trim()) {
+      const q = ledgerSearch.toLowerCase();
+      return (
+        item.name?.toLowerCase().includes(q) ||
+        item.asset_tag?.toLowerCase().includes(q) ||
+        item.serial_no?.toLowerCase().includes(q) ||
+        item.lab_name?.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-    >
-      {/* Page Title & Instrument Subtitle */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        marginBottom: '1.75rem',
-        paddingBottom: '1rem',
-        borderBottom: '1px solid var(--border-default)'
-      }}>
-        <div>
-          <div className="font-mono" style={{ fontSize: '0.725rem', fontWeight: 700, color: 'var(--accent-orange)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
-            OPERATIONAL TELEMETRY & FACILITY OVERVIEW
-          </div>
-          <h1 style={{ margin: 0 }}>Laboratory Instrument Panel</h1>
-          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem' }}>
-            Real-time status of university research benches, calibration cycles, and lab hardware.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            onClick={() => setIsMaintenanceModalOpen(true)}
-            className="btn btn-secondary"
-          >
-            <Wrench size={15} strokeWidth={1.75} />
-            <span>Record Service</span>
-          </button>
-          <button
-            onClick={() => navigate('/equipment')}
-            className="btn btn-primary"
-          >
-            <Layers size={15} strokeWidth={2} />
-            <span>View All Assets</span>
-          </button>
-        </div>
-      </div>
-
-      {loading ? (
-        <SkeletonLoader count={4} height="90px" />
-      ) : (
-        <>
-          {/* Key Metric Instrument Cards Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    <ProtectedRoute requiredRole="admin">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}
+      >
+        {/* Top Operational Header Bar */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
             gap: '1rem',
-            marginBottom: '1.75rem'
-          }}>
-            {/* Total Registered Assets */}
-            <div className="stat-card">
-              <div className="stat-card-label">
-                <span>TOTAL ASSETS</span>
-                <Layers size={14} color="var(--text-muted)" strokeWidth={1.75} />
-              </div>
-              <div className="stat-card-value">
-                <StatCounter value={totalCount} />
-              </div>
-              <div className="stat-card-meta">
-                Cataloged across {labs.length} laboratory rooms
-              </div>
+            paddingBottom: '1rem',
+            borderBottom: '1px solid var(--color-border-default)'
+          }}
+        >
+          <div>
+            <div
+              className="font-mono"
+              style={{
+                fontSize: 'var(--text-xs)',
+                fontWeight: 700,
+                color: 'var(--color-accent-orange)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                marginBottom: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem'
+              }}
+            >
+              <ShieldCheck size={14} strokeWidth={2} />
+              <span>ADMINISTRATIVE CONTROL CONSOLE • SECURE</span>
             </div>
-
-            {/* Available In Service */}
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--status-available)' }}>
-              <div className="stat-card-label">
-                <span>AVAILABLE NOW</span>
-                <CheckCircle2 size={14} color="var(--status-available)" strokeWidth={2} />
-              </div>
-              <div className="stat-card-value" style={{ color: 'var(--status-available)' }}>
-                <StatCounter value={availableCount} />
-              </div>
-              <div className="stat-card-meta">
-                Ready for immediate student allocation
-              </div>
-            </div>
-
-            {/* In Use / Allocated */}
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--status-inuse)' }}>
-              <div className="stat-card-label">
-                <span>IN USE / ACTIVE</span>
-                <Clock size={14} color="var(--status-inuse)" strokeWidth={2} />
-              </div>
-              <div className="stat-card-value" style={{ color: 'var(--status-inuse)' }}>
-                <StatCounter value={inUseCount} />
-              </div>
-              <div className="stat-card-meta">
-                Assigned to ongoing projects & lab sessions
-              </div>
-            </div>
-
-            {/* Damaged / Needs Attention */}
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--status-damaged)' }}>
-              <div className="stat-card-label">
-                <span>SERVICE REQUIRED</span>
-                <AlertTriangle size={14} color="var(--status-damaged)" strokeWidth={2} />
-              </div>
-              <div className="stat-card-value" style={{ color: 'var(--status-damaged)' }}>
-                <StatCounter value={damagedCount} />
-              </div>
-              <div className="stat-card-meta">
-                Flagged for repair or calibration
-              </div>
-            </div>
-
-            {/* Overall Fleet Health */}
-            <div className="stat-card">
-              <div className="stat-card-label">
-                <span>FACILITY HEALTH</span>
-                <Activity size={14} color="var(--accent-orange)" strokeWidth={2} />
-              </div>
-              <div className="stat-card-value">
-                <StatCounter value={healthRate} suffix="%" />
-              </div>
-              <div className="stat-card-meta">
-                {operationalCount} of {totalCount} units operational
-              </div>
-            </div>
+            <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)' }}>
+              Laboratory Instrument Panel
+            </h1>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              Real-time hardware inventory, active student loan circulation, and calibration maintenance queues.
+            </p>
           </div>
 
-          {/* Main Dashboard Split Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.5rem', marginBottom: '1.75rem' }}>
-            {/* Laboratory Room Allocation Matrix */}
-            <div className="spec-sheet-panel accent-edge">
-              <div className="panel-header">
-                <div className="panel-title">
-                  <Building2 size={15} strokeWidth={1.75} color="var(--accent-orange)" />
-                  <span>Laboratory Facility Utilization</span>
-                </div>
-                <Link to="/labs" className="btn btn-secondary btn-sm">
-                  <span>Manage Labs</span>
-                  <ArrowRight size={13} />
-                </Link>
+          {/* Quick Action Button Group */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={RefreshCw}
+              loading={loading}
+              onClick={fetchDashboardData}
+            >
+              Sync Telemetry
+            </Button>
+
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Plus}
+              onClick={() => {
+                setEditingItem(null);
+                setFormModalOpen(true);
+              }}
+            >
+              Register Asset
+            </Button>
+          </div>
+        </div>
+
+        {/* 1. Animated Count-Up KPI Strip */}
+        <KPIStrip
+          loading={loading}
+          stats={{
+            total: totalCount,
+            available: availableCount,
+            allocated: allocatedCount,
+            damaged: damagedCount,
+            maintenance: maintenanceCount
+          }}
+        />
+
+        {/* 2. Recharts Palette-Matched Visualizations */}
+        <DashboardCharts
+          labData={reportsData?.labBreakdown || labs.map((l) => ({
+            lab_name: l.name,
+            total_equipment: equipment.filter((e) => e.lab_id === l.id).length,
+            available_count: equipment.filter((e) => e.lab_id === l.id && e.status === 'available').length,
+            allocated_count: equipment.filter((e) => e.lab_id === l.id && (e.status === 'allocated' || e.status === 'in_use')).length
+          }))}
+          statusData={reportsData?.statusCounts || [
+            { status: 'available', count: availableCount },
+            { status: 'allocated', count: allocatedCount },
+            { status: 'under_maintenance', count: equipment.filter((e) => e.status === 'under_maintenance').length },
+            { status: 'damaged', count: damagedCount },
+            { status: 'retired', count: equipment.filter((e) => e.status === 'retired').length }
+          ]}
+        />
+
+        {/* Dashboard Navigation Sub-Tabs */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            borderBottom: '1px solid var(--color-border-default)',
+            paddingBottom: '0.5rem'
+          }}
+        >
+          {[
+            { id: 'overview', label: 'ATTENTION & OVERDUE' },
+            { id: 'maintenance', label: `MAINTENANCE QUEUE (${maintenanceCount})` },
+            { id: 'allocations', label: `CIRCULATION & LOANS (${allocations.filter((a) => a.returned_on === null).length})` },
+            { id: 'inventory', label: `INVENTORY LEDGER (${equipment.length})` }
+          ].map((tab) => {
+            const isActive = activeSection === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSection(tab.id)}
+                className="font-mono"
+                style={{
+                  padding: '0.45rem 0.85rem',
+                  fontSize: 'var(--text-xs)',
+                  fontWeight: isActive ? 700 : 500,
+                  border: '1px solid',
+                  borderColor: isActive ? 'var(--color-text-primary)' : 'var(--color-border-default)',
+                  backgroundColor: isActive ? 'var(--color-text-primary)' : 'var(--color-surface)',
+                  color: isActive ? 'var(--color-canvas)' : 'var(--color-text-secondary)',
+                  borderRadius: 'var(--radius-xs)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 3. Overdue Allocations Table (Shown on Overview & Allocations) */}
+        {(activeSection === 'overview' || activeSection === 'allocations') && (
+          <OverdueTable
+            overdueItems={overdueItems}
+            onAllocationReturned={fetchDashboardData}
+          />
+        )}
+
+        {/* 4. Active Maintenance Queue with Inline Status Updates */}
+        {(activeSection === 'overview' || activeSection === 'maintenance') && (
+          <MaintenanceQueue
+            tickets={maintenanceTickets}
+            onTicketUpdated={fetchDashboardData}
+          />
+        )}
+
+        {/* 5. Allocations Screen to Allocate & Return Equipment */}
+        {(activeSection === 'overview' || activeSection === 'allocations') && (
+          <AllocationsPanel
+            allocations={allocations}
+            availableEquipment={availableEquipment}
+            onAllocationChange={fetchDashboardData}
+          />
+        )}
+
+        {/* 6. Admin Equipment Inventory Ledger with Add / Edit / Delete */}
+        {(activeSection === 'overview' || activeSection === 'inventory') && (
+          <div className="spec-sheet-panel" style={{ marginBottom: '1.5rem' }}>
+            <div
+              className="panel-header"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem'
+              }}
+            >
+              <div className="panel-title">
+                <Layers size={16} strokeWidth={1.75} color="var(--color-accent-orange)" />
+                <span>Admin Asset Ledger & Control</span>
               </div>
-              <div className="panel-body" style={{ padding: 0 }}>
+
+              {/* Mini filter controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div style={{ position: 'relative' }}>
+                  <Search size={13} style={{ position: 'absolute', left: '0.55rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+                  <input
+                    type="text"
+                    placeholder="Filter ledger..."
+                    className="form-input font-mono"
+                    value={ledgerSearch}
+                    onChange={(e) => setLedgerSearch(e.target.value)}
+                    style={{
+                      paddingLeft: '1.75rem',
+                      paddingTop: '0.25rem',
+                      paddingBottom: '0.25rem',
+                      fontSize: '0.75rem',
+                      width: '170px'
+                    }}
+                  />
+                </div>
+
+                <select
+                  value={ledgerLabFilter}
+                  onChange={(e) => setLedgerLabFilter(e.target.value)}
+                  className="form-select font-mono"
+                  style={{
+                    padding: '0.25rem 1.75rem 0.25rem 0.55rem',
+                    fontSize: '0.75rem'
+                  }}
+                >
+                  <option value="all">All Labs</option>
+                  {labs.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={Plus}
+                  onClick={() => {
+                    setEditingItem(null);
+                    setFormModalOpen(true);
+                  }}
+                  style={{ padding: '0.25rem 0.6rem' }}
+                >
+                  Add Equipment
+                </Button>
+              </div>
+            </div>
+
+            <div className="panel-body" style={{ padding: 0 }}>
+              <div className="spec-table-container" style={{ border: 'none' }}>
                 <table className="spec-table">
                   <thead>
                     <tr>
-                      <th>Lab Room</th>
-                      <th>Dept</th>
-                      <th>Assigned Units</th>
-                      <th>Available</th>
-                      <th>In Use</th>
-                      <th>Status Load</th>
+                      <th>TAG</th>
+                      <th>EQUIPMENT NAME</th>
+                      <th>CATEGORY</th>
+                      <th>LAB LOCATION</th>
+                      <th>SERIAL NO</th>
+                      <th>STATUS</th>
+                      <th style={{ textAlign: 'right' }}>ADMIN ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {labs.map((lab) => {
-                      const labEq = equipment.filter(e => e.lab_id === lab.id);
-                      const avail = labEq.filter(e => e.status === 'available').length;
-                      const inuse = labEq.filter(e => e.status === 'in_use').length;
-                      const total = labEq.length;
-                      const usagePct = total > 0 ? Math.round((inuse / total) * 100) : 0;
+                    <AnimatePresence mode="popLayout">
+                      {filteredEquipment.slice(0, 15).map((item) => (
+                        <motion.tr
+                          key={item.id}
+                          layout
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                        >
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <Link
+                              to={`/equipment/${item.id}`}
+                              className="font-mono"
+                              style={{
+                                fontWeight: 700,
+                                color: 'var(--color-text-primary)',
+                                textDecoration: 'underline',
+                                textDecorationColor: 'var(--color-accent-orange)'
+                              }}
+                            >
+                              {item.asset_tag}
+                            </Link>
+                          </td>
 
-                      return (
-                        <tr key={lab.id}>
                           <td>
-                            <div style={{ fontWeight: 600 }}>{lab.name}</div>
-                            <div className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                              {lab.code} • {lab.location}
+                            <div style={{ fontWeight: 600 }}>{item.name}</div>
+                          </td>
+
+                          <td>
+                            <Badge variant="orange" size="sm">
+                              {item.category_name}
+                            </Badge>
+                          </td>
+
+                          <td>
+                            <div style={{ fontSize: 'var(--text-xs)' }}>{item.lab_name}</div>
+                          </td>
+
+                          <td className="font-mono" style={{ fontSize: 'var(--text-xs)' }}>
+                            {item.serial_no || '—'}
+                          </td>
+
+                          <td>
+                            <Badge status={item.status} size="sm" />
+                          </td>
+
+                          <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <button
+                                onClick={() => {
+                                  setEditingItem(item);
+                                  setFormModalOpen(true);
+                                }}
+                                className="font-mono"
+                                title="Edit Asset Specification"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  padding: '0.22rem 0.45rem',
+                                  fontSize: 'var(--text-xs)',
+                                  border: '1px solid var(--color-border-default)',
+                                  borderRadius: 'var(--radius-xs)',
+                                  backgroundColor: 'var(--color-surface)',
+                                  color: 'var(--color-text-primary)',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <Edit size={12} />
+                                <span>Edit</span>
+                              </button>
+
+                              <button
+                                onClick={() => setDeleteModalItem(item)}
+                                className="font-mono"
+                                title="Delete Asset"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  padding: '0.22rem 0.45rem',
+                                  fontSize: 'var(--text-xs)',
+                                  border: '1px solid var(--color-status-damaged-border)',
+                                  borderRadius: 'var(--radius-xs)',
+                                  backgroundColor: 'var(--color-status-damaged-bg)',
+                                  color: 'var(--color-status-damaged)',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <Trash2 size={12} />
+                                <span>Delete</span>
+                              </button>
                             </div>
                           </td>
-                          <td style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            {lab.department}
-                          </td>
-                          <td className="font-mono" style={{ fontWeight: 600 }}>
-                            {total} units
-                          </td>
-                          <td>
-                            <span className="font-mono" style={{ color: 'var(--status-available)', fontWeight: 600 }}>
-                              {avail}
-                            </span>
-                          </td>
-                          <td>
-                            <span className="font-mono" style={{ color: 'var(--status-inuse)', fontWeight: 600 }}>
-                              {inuse}
-                            </span>
-                          </td>
-                          <td style={{ width: '130px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <div style={{
-                                flex: 1,
-                                height: '6px',
-                                backgroundColor: 'var(--bg-muted)',
-                                borderRadius: '1px',
-                                overflow: 'hidden'
-                              }}>
-                                <div style={{
-                                  width: `${usagePct}%`,
-                                  height: '100%',
-                                  backgroundColor: usagePct > 70 ? 'var(--status-inuse)' : 'var(--accent-orange)'
-                                }} />
-                              </div>
-                              <span className="font-mono" style={{ fontSize: '0.7rem', minWidth: '28px' }}>
-                                {usagePct}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
                   </tbody>
                 </table>
               </div>
             </div>
-
-            {/* Right Column: Maintenance & Action Required */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* Critical Attention Panel */}
-              <div className="spec-sheet-panel">
-                <div className="panel-header" style={{ backgroundColor: alertEquipment.length > 0 ? 'var(--status-damaged-bg)' : 'var(--bg-subtle)' }}>
-                  <div className="panel-title" style={{ color: alertEquipment.length > 0 ? 'var(--status-damaged)' : 'var(--text-primary)' }}>
-                    <ShieldAlert size={15} strokeWidth={2} />
-                    <span>Attention Required ({alertEquipment.length})</span>
-                  </div>
-                </div>
-                <div className="panel-body">
-                  {alertEquipment.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                      <CheckCircle2 size={24} color="var(--status-available)" strokeWidth={1.75} style={{ margin: '0 auto 0.5rem auto', display: 'block' }} />
-                      All instruments calibrated and within operational parameters.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {alertEquipment.map((eq) => (
-                        <div
-                          key={eq.id}
-                          style={{
-                            padding: '0.75rem',
-                            border: '1px solid var(--status-damaged-border)',
-                            backgroundColor: 'var(--bg-surface)',
-                            borderRadius: 'var(--radius-xs)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between'
-                          }}
-                        >
-                          <div>
-                            <div className="font-mono" style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
-                              {eq.asset_tag} • {eq.lab_name}
-                            </div>
-                            <div style={{ fontSize: '0.85rem', fontWeight: 600, marginTop: '2px' }}>
-                              {eq.name}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--status-damaged)', marginTop: '2px' }}>
-                              {eq.notes || 'Damage flagged during operation.'}
-                            </div>
-                          </div>
-                          <Link to={`/equipment/${eq.id}`} className="btn btn-secondary btn-sm font-mono">
-                            Spec & Log
-                          </Link>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Recent Audit & Activity Log */}
-              <div className="spec-sheet-panel">
-                <div className="panel-header">
-                  <div className="panel-title">
-                    <Activity size={15} strokeWidth={1.75} color="var(--text-secondary)" />
-                    <span>System Audit Trail</span>
-                  </div>
-                </div>
-                <div className="panel-body" style={{ padding: '0.5rem 1rem' }}>
-                  {activities.length === 0 ? (
-                    <div style={{ padding: '1rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      No recent activity records found.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      {activities.map((act, index) => (
-                        <div
-                          key={act.id}
-                          style={{
-                            padding: '0.65rem 0',
-                            borderBottom: index < activities.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '0.65rem'
-                          }}
-                        >
-                          <span style={{
-                            width: '6px',
-                            height: '6px',
-                            borderRadius: '50%',
-                            backgroundColor: 'var(--accent-orange)',
-                            marginTop: '6px',
-                            flexShrink: 0
-                          }} />
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '0.775rem', color: 'var(--text-primary)', lineHeight: 1.35 }}>
-                              {act.details}
-                            </div>
-                            <div className="font-mono" style={{ fontSize: '0.675rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                              {act.created_at ? new Date(act.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
-        </>
-      )}
+        )}
 
-      <MaintenanceModal
-        isOpen={isMaintenanceModalOpen}
-        onClose={() => setIsMaintenanceModalOpen(false)}
-        onSuccess={() => {
-          triggerRefresh();
-          setIsMaintenanceModalOpen(false);
-        }}
-      />
-    </motion.div>
+        {/* Add / Edit Equipment Modal */}
+        <EquipmentFormModal
+          isOpen={formModalOpen}
+          initialData={editingItem}
+          labs={labs}
+          categories={categories}
+          onClose={() => {
+            setFormModalOpen(false);
+            setEditingItem(null);
+          }}
+          onSuccess={() => {
+            fetchDashboardData();
+          }}
+        />
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmModal
+          isOpen={!!deleteModalItem}
+          equipment={deleteModalItem}
+          onClose={() => setDeleteModalItem(null)}
+          onSuccess={() => {
+            fetchDashboardData();
+          }}
+        />
+      </motion.div>
+    </ProtectedRoute>
   );
 }

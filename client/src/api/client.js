@@ -36,6 +36,12 @@ api.interceptors.response.use(
 );
 
 // Domain API Services
+export const authApi = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  getMe: () => api.get('/auth/me'),
+  getUsers: () => api.get('/auth/users')
+};
+
 export const equipmentApi = {
   getAll: (params) => api.get('/equipment', { params }),
   getById: (id) => api.get(`/equipment/${id}`),

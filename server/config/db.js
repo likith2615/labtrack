@@ -88,9 +88,9 @@ export const getPool = () => pool;
 // In-Memory Fallback State (Aligned with database/seed.sql)
 export const inMemoryDB = {
   users: [
-    { id: 1, name: 'Dr. Arthur Vance', email: 'admin@labtrack.edu', role: 'admin', created_at: new Date('2024-01-10') },
-    { id: 2, name: 'Elena Ramos', email: 'elena.ramos@labtrack.edu', role: 'staff', created_at: new Date('2024-01-15') },
-    { id: 3, name: 'Liam Cooper', email: 'liam.cooper@student.labtrack.edu', role: 'student', created_at: new Date('2024-02-01') }
+    { id: 1, name: 'Dr. Arthur Vance', email: 'admin@labtrack.edu', password_hash: '$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5bA0FzM0vO0cQ1sM4k8eSe999abcd', role: 'admin', created_at: new Date('2024-01-10') },
+    { id: 2, name: 'Elena Ramos', email: 'elena.ramos@labtrack.edu', password_hash: '$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5bA0FzM0vO0cQ1sM4k8eSe999abcd', role: 'staff', created_at: new Date('2024-01-15') },
+    { id: 3, name: 'Liam Cooper', email: 'liam.cooper@student.labtrack.edu', password_hash: '$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5bA0FzM0vO0cQ1sM4k8eSe999abcd', role: 'student', created_at: new Date('2024-02-01') }
   ],
   laboratories: [
     { id: 1, name: 'Computer Lab 1', location: 'Room 201, Alan Turing Complex', incharge_id: 2 },

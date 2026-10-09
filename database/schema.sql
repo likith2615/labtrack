@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS equipment (
   purchase_date DATE NOT NULL,
   status ENUM('available', 'allocated', 'under_maintenance', 'damaged', 'retired') NOT NULL DEFAULT 'available',
   description TEXT NULL,
+  image_url VARCHAR(500) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_equipment_category

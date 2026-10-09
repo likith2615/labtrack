@@ -2,6 +2,7 @@ import React from 'react';
 import { Layers } from 'lucide-react';
 
 export default function EmptyState({
+  illustration: Illustration,
   icon: Icon = Layers,
   title = 'No Records Found',
   description = 'No matching items or sensor telemetry found in the database.',
@@ -25,22 +26,28 @@ export default function EmptyState({
         ...style
       }}
     >
-      <div
-        style={{
-          width: '44px',
-          height: '44px',
-          borderRadius: 'var(--radius-xs)',
-          backgroundColor: 'var(--color-surface-subtle)',
-          border: '1px solid var(--color-border-subtle)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: '0.85rem',
-          color: 'var(--color-text-muted)'
-        }}
-      >
-        <Icon size={22} strokeWidth={1.5} />
-      </div>
+      {Illustration ? (
+        <div style={{ width: '130px', height: '130px', marginBottom: '1rem' }}>
+          <Illustration width="100%" height="100%" />
+        </div>
+      ) : (
+        <div
+          style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: 'var(--radius-xs)',
+            backgroundColor: 'var(--color-surface-subtle)',
+            border: '1px solid var(--color-border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '0.85rem',
+            color: 'var(--color-text-muted)'
+          }}
+        >
+          <Icon size={24} strokeWidth={1.5} />
+        </div>
+      )}
 
       <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: '0.35rem' }}>
         {title}

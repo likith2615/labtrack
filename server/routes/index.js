@@ -1,4 +1,5 @@
 import express from 'express';
+import authRoutes from './authRoutes.js';
 import healthRoutes from './healthRoutes.js';
 import equipmentRoutes from './equipmentRoutes.js';
 import labsRoutes from './labsRoutes.js';
@@ -10,6 +11,7 @@ import reportsRoutes from './reportsRoutes.js';
 
 const router = express.Router();
 
+router.use('/auth', authRoutes);
 router.use('/health', healthRoutes);
 router.use('/equipment', equipmentRoutes);
 router.use('/labs', labsRoutes);

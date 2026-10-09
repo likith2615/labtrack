@@ -74,6 +74,7 @@ export const getAllEquipment = asyncHandler(async (req, res) => {
         e.purchase_date, 
         e.status, 
         e.description, 
+        e.image_url,
         e.created_at, 
         e.updated_at,
         c.name AS category_name,
@@ -265,7 +266,7 @@ export const getEquipmentById = asyncHandler(async (req, res) => {
  * @access Public
  */
 export const createEquipment = asyncHandler(async (req, res) => {
-  const { asset_tag, name, category_id, lab_id, serial_no, purchase_date, status = 'available', description } = req.body;
+  const { asset_tag, name, category_id, lab_id, serial_no, purchase_date, status = 'available', description, image_url } = req.body;
 
   if (getIsMysqlActive()) {
     // 1. Verify category exists
@@ -299,8 +300,8 @@ export const createEquipment = asyncHandler(async (req, res) => {
     }
 
     const insertSql = `
-      INSERT INTO equipment (asset_tag, name, category_id, lab_id, serial_no, purchase_date, status, description)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO equipment (asset_tag, name, category_id, lab_id, serial_no, purchase_date, status, description, image_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const result = await query(insertSql, [
       asset_tag.trim(),
@@ -310,7 +311,8 @@ export const createEquipment = asyncHandler(async (req, res) => {
       serial_no.trim(),
       purchase_date,
       status,
-      description ? description.trim() : null
+      description ? description.trim() : null,
+      image_url ? image_url.trim() : null
     ]);
 
     return res.status(201).json({
@@ -325,7 +327,8 @@ export const createEquipment = asyncHandler(async (req, res) => {
         serial_no: serial_no.trim(),
         purchase_date,
         status,
-        description: description ? description.trim() : null
+        description: description ? description.trim() : null,
+        image_url: image_url ? image_url.trim() : null
       },
       errors: null
     });
@@ -351,7 +354,8 @@ export const createEquipment = asyncHandler(async (req, res) => {
     serial_no: serial_no.trim(),
     purchase_date,
     status,
-    description: description ? description.trim() : ''
+    description: description ? description.trim() : '',
+    image_url: image_url ? image_url.trim() : null
   };
 
   inMemoryDB.equipment.unshift(newEquipment);
@@ -371,7 +375,7 @@ export const createEquipment = asyncHandler(async (req, res) => {
  */
 export const updateEquipment = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { asset_tag, name, category_id, lab_id, serial_no, purchase_date, status, description } = req.body;
+  const { asset_tag, name, category_id, lab_id, serial_no, purchase_date, status, description, image_url } = req.body;
 
   if (getIsMysqlActive()) {
     // 1. Check equipment exists
@@ -417,7 +421,7 @@ export const updateEquipment = asyncHandler(async (req, res) => {
     const updateSql = `
       UPDATE equipment
       SET asset_tag = ?, name = ?, category_id = ?, lab_id = ?, serial_no = ?,
-          purchase_date = ?, status = ?, description = ?, updated_at = NOW()
+          purchase_date = ?, status = ?, description = ?, image_url = ?, updated_at = NOW()
       WHERE id = ?
     `;
 
@@ -430,6 +434,7 @@ export const updateEquipment = asyncHandler(async (req, res) => {
       purchase_date,
       status,
       description ? description.trim() : null,
+      image_url !== undefined ? (image_url ? image_url.trim() : null) : (existing[0]?.image_url || null),
       Number(id)
     ]);
 
@@ -445,7 +450,8 @@ export const updateEquipment = asyncHandler(async (req, res) => {
         serial_no: serial_no.trim(),
         purchase_date,
         status,
-        description: description ? description.trim() : null
+        description: description ? description.trim() : null,
+        image_url: image_url !== undefined ? (image_url ? image_url.trim() : null) : (existing[0]?.image_url || null)
       },
       errors: null
     });
@@ -478,6 +484,9 @@ export const updateEquipment = asyncHandler(async (req, res) => {
   eq.purchase_date = purchase_date;
   eq.status = status;
   eq.description = description ? description.trim() : '';
+  if (image_url !== undefined) {
+    eq.image_url = image_url ? image_url.trim() : null;
+  }
 
   res.status(200).json({
     success: true,

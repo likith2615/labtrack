@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 
 const variantStyles = {
@@ -75,6 +75,7 @@ export default function Button({
 }) {
   const currentVariant = variantStyles[variant] || variantStyles.secondary;
   const currentSize = sizeStyles[size] || sizeStyles.md;
+  const shouldReduceMotion = useReducedMotion();
 
   const isDisabled = disabled || loading;
 
@@ -83,8 +84,8 @@ export default function Button({
       type={type}
       onClick={onClick}
       disabled={isDisabled}
-      whileHover={isDisabled ? {} : { y: -1, transition: { duration: 0.15 } }}
-      whileTap={isDisabled ? {} : { y: 1, transition: { duration: 0.08 } }}
+      whileHover={isDisabled || shouldReduceMotion ? {} : { y: -1, transition: { duration: 0.15 } }}
+      whileTap={isDisabled || shouldReduceMotion ? {} : { y: 1, transition: { duration: 0.08 } }}
       style={{
         display: fullWidth ? 'flex' : 'inline-flex',
         alignItems: 'center',
@@ -98,17 +99,17 @@ export default function Button({
         color: currentVariant.color,
         cursor: isDisabled ? 'not-allowed' : 'pointer',
         opacity: isDisabled ? 0.55 : 1,
-        transition: 'background-color var(--duration-fast) var(--ease-technical), border-color var(--duration-fast) var(--ease-technical)',
+        transition: 'background-color var(--duration-fast) var(--ease-technical), border-color var(--duration-fast) var(--ease-technical), box-shadow var(--duration-fast) var(--ease-technical)',
         lineHeight: 1.2,
         userSelect: 'none',
         ...currentSize,
         ...style
       }}
-      className={className}
+      className={`btn btn-${variant} ${className}`}
       {...props}
     >
       {loading ? (
-        <Loader2 size={size === 'sm' ? 12 : 15} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+        <Loader2 size={size === 'sm' ? 12 : 15} className="animate-spin" style={{ animation: shouldReduceMotion ? 'none' : 'spin 1s linear infinite' }} />
       ) : (
         Icon && iconPosition === 'left' && <Icon size={size === 'sm' ? 13 : 15} strokeWidth={1.75} />
       )}

@@ -1,397 +1,556 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  ArrowLeft, 
-  Wrench, 
-  RefreshCw, 
-  Trash2, 
-  Building2, 
-  Calendar, 
-  ShieldCheck, 
-  Tag, 
-  FileText, 
-  CheckCircle2, 
-  Clock, 
+import {
+  ArrowLeft,
+  Wrench,
+  RefreshCw,
+  Trash2,
+  Building2,
+  Calendar,
+  ShieldCheck,
+  Tag,
+  FileText,
+  CheckCircle2,
+  Clock,
   AlertCircle,
   Cpu,
-  Layers
+  Layers,
+  MapPin,
+  User,
+  Barcode,
+  ExternalLink
 } from 'lucide-react';
-import { equipmentApi } from '../api/client';
-import StatusBadge from '../components/common/StatusBadge';
-import SpecTag from '../components/common/SpecTag';
-import SkeletonLoader from '../components/common/SkeletonLoader';
-import StatusDrawer from '../components/equipment/StatusDrawer';
-import MaintenanceModal from '../components/maintenance/MaintenanceModal';
+import { equipmentApi, maintenanceApi } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/ui/Toast';
+
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Skeleton from '../components/ui/Skeleton';
+import Modal from '../components/ui/Modal';
+import DeleteConfirmModal from '../components/dashboard/DeleteConfirmModal';
+import EquipmentFormModal from '../components/dashboard/EquipmentFormModal';
+import EquipmentCardMedia from '../components/equipment/EquipmentCardMedia';
 
 export default function EquipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isStaff, isAdmin, isStudent, user } = useAuth();
+  const toast = useToast();
+
   const [equipment, setEquipment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [isStatusDrawerOpen, setIsStatusDrawerOpen] = useState(false);
-  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  // Modals
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
-  const fetchDetail = () => {
+  // Damage report state
+  const [reportText, setReportText] = useState('');
+  const [reportSeverity, setReportSeverity] = useState('medium');
+  const [submittingReport, setSubmittingReport] = useState(false);
+
+  const fetchDetail = useCallback(async () => {
     setLoading(true);
-    equipmentApi.getById(id)
-      .then(res => {
-        setEquipment(res.data);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message || 'Equipment not found.');
-        setLoading(false);
-      });
-  };
+    setError(null);
+    try {
+      const res = await equipmentApi.getById(id);
+      setEquipment(res.data);
+    } catch (err) {
+      setError(err.message || 'Equipment item not found.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     fetchDetail();
-  }, [id]);
+  }, [fetchDetail]);
 
-  const handleDelete = async () => {
-    if (!window.confirm(`Are you sure you want to permanently delete asset [${equipment?.asset_tag}]? This action cannot be undone.`)) {
-      return;
-    }
-    setIsDeleting(true);
+  const handleReportDamage = async (e) => {
+    e.preventDefault();
+    if (!reportText.trim()) return;
+
+    setSubmittingReport(true);
     try {
-      await equipmentApi.delete(id);
-      navigate('/equipment');
+      await maintenanceApi.report({
+        equipment_id: Number(id),
+        reported_by: user?.id || null,
+        issue_description: reportText.trim(),
+        severity: reportSeverity
+      });
+      toast.success('Damage report submitted. Equipment flagged as Damaged.', 'Report Logged');
+      setIsReportModalOpen(false);
+      setReportText('');
+      fetchDetail();
     } catch (err) {
-      alert(err.message || 'Failed to delete equipment.');
-      setIsDeleting(false);
+      toast.error(err.message || 'Failed to submit report.', 'Error');
+    } finally {
+      setSubmittingReport(false);
     }
   };
 
   if (loading) {
     return (
-      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-        <SkeletonLoader count={4} height="70px" />
+      <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <Skeleton width="180px" height="32px" />
+        <div className="spec-sheet-panel" style={{ padding: '1.5rem' }}>
+          <Skeleton width="50%" height="28px" />
+          <div style={{ margin: '1rem 0' }}><Skeleton width="70%" height="16px" /></div>
+          <Skeleton height="90px" />
+        </div>
       </div>
     );
   }
 
   if (error || !equipment) {
     return (
-      <div style={{
-        maxWidth: '600px',
-        margin: '3rem auto',
-        backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--status-damaged-border)',
-        padding: '2rem',
-        textAlign: 'center',
-        borderRadius: 'var(--radius-xs)'
-      }}>
-        <AlertCircle size={32} color="var(--status-damaged)" style={{ margin: '0 auto 0.5rem auto', display: 'block' }} />
-        <h3>Asset Record Not Found</h3>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-          {error || 'Unable to retrieve instrument specifications for this identifier.'}
+      <div
+        style={{
+          maxWidth: '600px',
+          margin: '3rem auto',
+          backgroundColor: 'var(--color-surface)',
+          border: '1px solid var(--color-status-damaged-border)',
+          padding: '2.5rem',
+          textAlign: 'center',
+          borderRadius: 'var(--radius-sm)',
+          boxShadow: 'var(--shadow-panel)'
+        }}
+      >
+        <AlertCircle size={32} color="var(--color-status-damaged)" style={{ margin: '0 auto 0.75rem auto', display: 'block' }} />
+        <h2 style={{ margin: '0 0 0.5rem 0' }}>Asset Record Not Found</h2>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>
+          {error || 'Unable to retrieve instrument specifications for this asset identifier.'}
         </p>
-        <Link to="/equipment" className="btn btn-secondary">
-          <ArrowLeft size={14} />
-          <span>Return to Registry</span>
+        <Link to="/equipment">
+          <Button variant="secondary" icon={ArrowLeft}>
+            Return to Equipment Registry
+          </Button>
         </Link>
       </div>
     );
   }
 
-  const specs = equipment.specifications && typeof equipment.specifications === 'object'
-    ? equipment.specifications
-    : {};
+  const allocations = equipment.allocations || [];
+  const maintenance = equipment.maintenance || [];
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-      style={{ maxWidth: '1100px', margin: '0 auto' }}
+      style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}
     >
-      {/* Back Link */}
-      <div style={{ marginBottom: '1rem' }}>
-        <Link to="/equipment" className="btn btn-secondary btn-sm font-mono">
-          <ArrowLeft size={13} />
-          <span>Back to Equipment Registry</span>
+      {/* Top Back & Quick Action Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <Link to="/equipment">
+          <Button variant="secondary" size="sm" icon={ArrowLeft}>
+            Back to Registry
+          </Button>
         </Link>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Wrench}
+            onClick={() => setIsReportModalOpen(true)}
+          >
+            Report Fault / Service
+          </Button>
+
+          {isStaff && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={RefreshCw}
+              onClick={() => setIsEditModalOpen(true)}
+            >
+              Edit Specs
+            </Button>
+          )}
+
+          {isAdmin && (
+            <Button
+              variant="danger"
+              size="sm"
+              icon={Trash2}
+              onClick={() => setIsDeleteModalOpen(true)}
+            >
+              Delete Asset
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Main Spec Sheet Header */}
-      <div className="spec-sheet-panel accent-edge" style={{ marginBottom: '1.5rem' }}>
+      {/* Main Spec Sheet Panel */}
+      <div className="spec-sheet-panel accent-edge">
         <div className="panel-header">
-          <div className="panel-title font-mono" style={{ fontSize: '0.85rem' }}>
+          <div className="panel-title font-mono" style={{ fontSize: 'var(--text-xs)' }}>
+            <Barcode size={15} color="var(--color-accent-orange)" />
             <span>ASSET SPECIFICATION RECORD</span>
-            <span style={{ color: 'var(--text-muted)' }}>•</span>
-            <span style={{ color: 'var(--accent-orange)' }}>{equipment.asset_tag}</span>
+            <span style={{ color: 'var(--color-text-muted)' }}>•</span>
+            <span style={{ color: 'var(--color-accent-orange)', fontWeight: 800 }}>{equipment.asset_tag}</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <button
-              onClick={() => setIsStatusDrawerOpen(true)}
-              className="btn btn-secondary btn-sm"
-            >
-              <RefreshCw size={13} />
-              <span>Change Status</span>
-            </button>
-            <button
-              onClick={() => setIsMaintenanceModalOpen(true)}
-              className="btn btn-primary btn-sm"
-            >
-              <Wrench size={13} />
-              <span>Log Service</span>
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="btn btn-secondary btn-sm"
-              title="Delete asset record"
-              style={{ color: 'var(--status-damaged)' }}
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
+          <Badge status={equipment.status} />
         </div>
 
         <div className="panel-body">
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
-            <div>
-              <h1 style={{ fontSize: '1.65rem', marginBottom: '0.35rem' }}>
-                {equipment.name}
-              </h1>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
-                <SpecTag label="MFG" value={equipment.manufacturer} />
-                <SpecTag label="MODEL" value={equipment.model_number} />
-                <SpecTag label="SERIAL" value={equipment.serial_number} />
-                <SpecTag label="CAT" value={equipment.category_name} />
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '1.5rem',
+              marginBottom: '1.5rem',
+              alignItems: 'stretch'
+            }}
+          >
+            {/* Left: Risograph Illustration / Duotone Photo */}
+            <div
+              style={{
+                border: '1px solid var(--color-border-default)',
+                borderRadius: 'var(--radius-xs)',
+                overflow: 'hidden',
+                backgroundColor: 'var(--color-surface-subtle)',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
+              <div
+                className="font-mono"
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  backgroundColor: 'var(--color-surface)',
+                  borderBottom: '1px solid var(--color-border-subtle)',
+                  color: 'var(--color-text-secondary)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <span>HARDWARE SPECIMEN VISUAL</span>
+                <span style={{ color: 'var(--color-accent-orange)' }}>
+                  {equipment.image_url ? 'DUOTONE_ATTACHED' : 'RISOGRAPH_VECTOR'}
+                </span>
               </div>
+              <EquipmentCardMedia
+                equipment={equipment}
+                height="220px"
+                style={{ borderBottom: 'none' }}
+              />
             </div>
 
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>OPERATIONAL STATE</div>
-              <StatusBadge status={equipment.status} />
-            </div>
-          </div>
+            {/* Right: Asset Title & Key Metrics Grid */}
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1rem' }}>
+              <div>
+                <h1 style={{ fontSize: 'var(--text-2xl)', margin: '0 0 0.5rem 0', fontWeight: 800 }}>
+                  {equipment.name}
+                </h1>
 
-          {/* Key Metric Info Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '0.75rem',
-            padding: '1rem',
-            backgroundColor: 'var(--bg-subtle)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 'var(--radius-xs)'
-          }}>
-            <div>
-              <div className="font-mono" style={{ fontSize: '0.675rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Assigned Facility
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
+                  <Badge variant="orange">{equipment.category_name}</Badge>
+                  <Badge variant="default">SN: {equipment.serial_no || 'N/A'}</Badge>
+                  <Badge variant="default">Room: {equipment.lab_name}</Badge>
+                </div>
               </div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, marginTop: '2px' }}>
-                {equipment.lab_name}
-              </div>
-              <div className="font-mono" style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>
-                {equipment.lab_location}
-              </div>
-            </div>
 
-            <div>
-              <div className="font-mono" style={{ fontSize: '0.675rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Lab In-Charge
-              </div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, marginTop: '2px' }}>
-                {equipment.lab_in_charge || 'Department Head'}
-              </div>
-              <div className="font-mono" style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>
-                {equipment.lab_contact_email || 'lab@college.edu'}
-              </div>
-            </div>
+              {/* Key Metric Info Grid */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '0.75rem',
+                  padding: '0.85rem',
+                  backgroundColor: 'var(--color-surface-subtle)',
+                  border: '1px solid var(--color-border-default)',
+                  borderRadius: 'var(--radius-xs)'
+                }}
+              >
+                <div>
+                  <div className="font-mono" style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+                    Assigned Laboratory
+                  </div>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginTop: '2px' }}>
+                    {equipment.lab_name}
+                  </div>
+                  <div className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>
+                    {equipment.lab_location}
+                  </div>
+                </div>
 
-            <div>
-              <div className="font-mono" style={{ fontSize: '0.675rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Commission / Purchase Date
-              </div>
-              <div className="font-mono" style={{ fontSize: '0.85rem', fontWeight: 600, marginTop: '2px' }}>
-                {equipment.purchase_date || 'N/A'}
-              </div>
-              <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>
-                Warranty: {equipment.warranty_expiry || 'Standard'}
-              </div>
-            </div>
+                <div>
+                  <div className="font-mono" style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+                    Faculty In-Charge
+                  </div>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginTop: '2px' }}>
+                    {equipment.lab_incharge_name || 'Assigned Staff'}
+                  </div>
+                  <div className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>
+                    {equipment.lab_incharge_email || 'lab@college.edu'}
+                  </div>
+                </div>
 
-            <div>
-              <div className="font-mono" style={{ fontSize: '0.675rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Last Service & Calibration
-              </div>
-              <div className="font-mono" style={{ fontSize: '0.85rem', fontWeight: 600, marginTop: '2px', color: equipment.last_serviced ? 'var(--status-available)' : 'var(--text-muted)' }}>
-                {equipment.last_serviced || 'Pending'}
-              </div>
-              <div className="font-mono" style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>
-                Next due: {equipment.next_service_due || 'TBD'}
+                <div>
+                  <div className="font-mono" style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+                    Commission Date
+                  </div>
+                  <div className="font-mono" style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginTop: '2px' }}>
+                    {equipment.purchase_date ? String(equipment.purchase_date).slice(0, 10) : 'Not Specified'}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>
+                    ID: #{equipment.id}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="font-mono" style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+                    Category Class
+                  </div>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginTop: '2px' }}>
+                    {equipment.category_name}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>
+                    {equipment.category_description}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Two Column Layout: Specifications & Bench Notes */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-        {/* Technical Instrument Specifications */}
+      {/* Description & Technical Bench Notes */}
+      {equipment.description && (
         <div className="spec-sheet-panel">
           <div className="panel-header">
             <div className="panel-title">
-              <Cpu size={15} strokeWidth={1.75} color="var(--accent-orange)" />
-              <span>Technical Parameters</span>
+              <FileText size={15} strokeWidth={1.75} color="var(--color-accent-orange)" />
+              <span>Bench Location & Calibration Notes</span>
             </div>
           </div>
-          <div className="panel-body" style={{ padding: 0 }}>
-            {Object.keys(specs).length === 0 ? (
-              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                Standard OEM baseline parameters configured.
-              </div>
-            ) : (
+          <div className="panel-body">
+            <div
+              className="font-mono"
+              style={{
+                whiteSpace: 'pre-wrap',
+                fontSize: 'var(--text-sm)',
+                lineHeight: 1.6,
+                backgroundColor: 'var(--color-surface-subtle)',
+                padding: '0.85rem 1rem',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 'var(--radius-xs)'
+              }}
+            >
+              {equipment.description}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loan & Allocation History Table */}
+      <div className="spec-sheet-panel">
+        <div className="panel-header">
+          <div className="panel-title">
+            <Clock size={15} strokeWidth={1.75} color="var(--color-accent-orange)" />
+            <span>Allocation & Circulation History ({allocations.length})</span>
+          </div>
+        </div>
+        <div className="panel-body" style={{ padding: 0 }}>
+          {allocations.length === 0 ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+              No previous allocation checkouts recorded for this instrument.
+            </div>
+          ) : (
+            <div className="spec-table-container" style={{ border: 'none' }}>
               <table className="spec-table">
+                <thead>
+                  <tr>
+                    <th>LOAN ID</th>
+                    <th>BORROWER (RECIPIENT)</th>
+                    <th>ROLE</th>
+                    <th>CHECKOUT DATE</th>
+                    <th>DUE DATE</th>
+                    <th>RETURN DATE</th>
+                    <th>PURPOSE</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {Object.entries(specs).map(([key, val]) => (
-                    <tr key={key}>
-                      <td style={{ width: '40%', fontWeight: 600, textTransform: 'capitalize', color: 'var(--text-secondary)' }}>
-                        {key.replace(/_/g, ' ')}
+                  {allocations.map((a) => (
+                    <tr key={a.id}>
+                      <td className="font-mono" style={{ fontWeight: 700, fontSize: 'var(--text-xs)' }}>
+                        #{a.id}
                       </td>
-                      <td className="font-mono" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {String(val)}
+                      <td style={{ fontWeight: 600 }}>{a.user_name}</td>
+                      <td className="font-mono" style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase' }}>
+                        {a.user_role || 'student'}
+                      </td>
+                      <td className="font-mono" style={{ fontSize: 'var(--text-xs)' }}>
+                        {a.allocated_on ? String(a.allocated_on).slice(0, 10) : '—'}
+                      </td>
+                      <td className="font-mono" style={{ fontSize: 'var(--text-xs)' }}>
+                        {a.due_date ? String(a.due_date).slice(0, 10) : '—'}
+                      </td>
+                      <td>
+                        {a.returned_on ? (
+                          <span className="font-mono" style={{ color: 'var(--color-status-available)', fontWeight: 700, fontSize: 'var(--text-xs)' }}>
+                            Returned ({String(a.returned_on).slice(0, 10)})
+                          </span>
+                        ) : (
+                          <span className="font-mono" style={{ color: 'var(--color-status-allocated)', fontWeight: 700, fontSize: 'var(--text-xs)' }}>
+                            ACTIVE LOAN
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ fontSize: 'var(--text-xs)', maxWidth: '200px' }}>{a.purpose}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Maintenance & Repair History Table */}
+      <div className="spec-sheet-panel">
+        <div className="panel-header">
+          <div className="panel-title">
+            <Wrench size={15} strokeWidth={1.75} color="var(--color-accent-orange)" />
+            <span>Service & Fault Tickets ({maintenance.length})</span>
+          </div>
+        </div>
+        <div className="panel-body" style={{ padding: 0 }}>
+          {maintenance.length === 0 ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+              No maintenance fault reports recorded. Instrument operates at nominal baseline.
+            </div>
+          ) : (
+            <div className="spec-table-container" style={{ border: 'none' }}>
+              <table className="spec-table">
+                <thead>
+                  <tr>
+                    <th>TICKET</th>
+                    <th>FAULT DESCRIPTION</th>
+                    <th>SEVERITY</th>
+                    <th>REPORTED BY</th>
+                    <th>DATE</th>
+                    <th>STATUS</th>
+                    <th>TECHNICIAN NOTES</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {maintenance.map((m) => (
+                    <tr key={m.id}>
+                      <td className="font-mono" style={{ fontWeight: 700, fontSize: 'var(--text-xs)' }}>
+                        #MNT-{String(m.id).padStart(3, '0')}
+                      </td>
+                      <td style={{ fontSize: 'var(--text-xs)', fontWeight: 500, maxWidth: '240px' }}>
+                        {m.issue_description}
+                      </td>
+                      <td className="font-mono" style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', fontWeight: 700 }}>
+                        {m.severity}
+                      </td>
+                      <td style={{ fontSize: 'var(--text-xs)' }}>{m.reporter_name || 'Staff'}</td>
+                      <td className="font-mono" style={{ fontSize: 'var(--text-xs)' }}>
+                        {m.reported_on ? String(m.reported_on).slice(0, 10) : 'Recent'}
+                      </td>
+                      <td>
+                        <Badge
+                          status={m.status === 'resolved' ? 'available' : m.status === 'in_progress' ? 'under_maintenance' : 'damaged'}
+                          size="sm"
+                        >
+                          {m.status?.replace('_', ' ').toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="font-mono" style={{ fontSize: '0.725rem', color: 'var(--color-text-muted)' }}>
+                        {m.technician_notes || '—'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            )}
-          </div>
-        </div>
-
-        {/* Operational Notes & Location */}
-        <div className="spec-sheet-panel">
-          <div className="panel-header">
-            <div className="panel-title">
-              <FileText size={15} strokeWidth={1.75} color="var(--text-secondary)" />
-              <span>Bench Deployment & Service Notes</span>
             </div>
-          </div>
-          <div className="panel-body">
-            <div className="font-mono" style={{
-              whiteSpace: 'pre-wrap',
-              fontSize: '0.8rem',
-              lineHeight: 1.6,
-              color: 'var(--text-primary)',
-              backgroundColor: 'var(--bg-subtle)',
-              padding: '0.85rem',
-              border: '1px solid var(--border-default)',
-              borderRadius: 'var(--radius-xs)',
-              minHeight: '110px'
-            }}>
-              {equipment.notes || 'No operational deployment notes registered.'}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Maintenance & Calibration History Table */}
-      <div className="spec-sheet-panel">
-        <div className="panel-header">
-          <div className="panel-title">
-            <Wrench size={15} strokeWidth={1.75} color="var(--accent-orange)" />
-            <span>Service & Calibration History ({equipment.maintenance_logs?.length || 0})</span>
-          </div>
-
-          <button
-            onClick={() => setIsMaintenanceModalOpen(true)}
-            className="btn btn-secondary btn-sm"
-          >
-            <Wrench size={12} />
-            <span>Add Service Record</span>
-          </button>
-        </div>
-
-        <div className="panel-body" style={{ padding: 0 }}>
-          {(!equipment.maintenance_logs || equipment.maintenance_logs.length === 0) ? (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-              No calibration or repair logs recorded for this asset yet.
-            </div>
-          ) : (
-            <table className="spec-table">
-              <thead>
-                <tr>
-                  <th>Service Date</th>
-                  <th>Service Type</th>
-                  <th>Certified Technician</th>
-                  <th>Diagnostic Findings</th>
-                  <th>Action Taken</th>
-                  <th>Post Status</th>
-                  <th>Cost ($)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {equipment.maintenance_logs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="font-mono" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      {log.service_date}
-                    </td>
-                    <td>
-                      <span className="spec-tag" style={{ textTransform: 'capitalize' }}>
-                        {log.service_type?.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: '0.8rem' }}>
-                      {log.technician_name}
-                    </td>
-                    <td style={{ fontSize: '0.8rem', maxWidth: '240px' }}>
-                      {log.findings}
-                    </td>
-                    <td style={{ fontSize: '0.8rem', maxWidth: '240px' }}>
-                      {log.action_taken}
-                    </td>
-                    <td>
-                      <StatusBadge status={log.status_after_service} size="sm" />
-                    </td>
-                    <td className="font-mono" style={{ fontWeight: 600 }}>
-                      ${parseFloat(log.cost || 0).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
         </div>
       </div>
 
-      {/* Status Drawer */}
-      <AnimatePresence>
-        {isStatusDrawerOpen && (
-          <StatusDrawer
-            equipment={equipment}
-            isOpen={isStatusDrawerOpen}
-            onClose={() => setIsStatusDrawerOpen(false)}
-            onSuccess={() => {
-              fetchDetail();
-              setIsStatusDrawerOpen(false);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* Edit Equipment Modal */}
+      <EquipmentFormModal
+        isOpen={isEditModalOpen}
+        initialData={equipment}
+        onClose={() => setIsEditModalOpen(false)}
+        onSuccess={() => {
+          fetchDetail();
+          setIsEditModalOpen(false);
+        }}
+      />
 
-      {/* Maintenance Modal */}
-      <AnimatePresence>
-        {isMaintenanceModalOpen && (
-          <MaintenanceModal
-            isOpen={isMaintenanceModalOpen}
-            preselectedEquipment={equipment}
-            onClose={() => setIsMaintenanceModalOpen(false)}
-            onSuccess={() => {
-              fetchDetail();
-              setIsMaintenanceModalOpen(false);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* Delete Confirm Modal */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        equipment={equipment}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onSuccess={() => {
+          navigate('/equipment');
+        }}
+      />
+
+      {/* Report Damage Modal */}
+      <Modal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        title="Report Equipment Fault"
+        subtitle={`TARGET: ${equipment.asset_tag} • ${equipment.name}`}
+        icon={Wrench}
+        accentEdge
+        maxWidth="500px"
+      >
+        <form onSubmit={handleReportDamage} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          <div>
+            <label style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '0.35rem' }}>
+              Fault Severity Level
+            </label>
+            <select
+              value={reportSeverity}
+              onChange={(e) => setReportSeverity(e.target.value)}
+              className="form-select font-mono"
+            >
+              <option value="low">Low (Minor calibration offset / cosmetic)</option>
+              <option value="medium">Medium (Faulty channel / intermittent connection)</option>
+              <option value="high">High (Complete unit shutdown / power hazard)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '0.35rem' }}>
+              Fault Description *
+            </label>
+            <textarea
+              required
+              rows={3}
+              className="form-textarea"
+              placeholder="Describe observed hardware symptom..."
+              value={reportText}
+              onChange={(e) => setReportText(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-border-subtle)' }}>
+            <Button variant="secondary" type="button" onClick={() => setIsReportModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" loading={submittingReport}>
+              Submit Damage Ticket
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </motion.div>
   );
 }

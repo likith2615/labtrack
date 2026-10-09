@@ -55,7 +55,11 @@ const equipmentWriteValidation = [
   body('description')
     .optional({ nullable: true })
     .isString()
-    .withMessage('Description must be a string')
+    .withMessage('Description must be a string'),
+  body('image_url')
+    .optional({ nullable: true })
+    .isString()
+    .withMessage('image_url must be a string')
 ];
 
 // GET /api/equipment

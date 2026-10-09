@@ -30,6 +30,23 @@ import Drawer from '../components/ui/Drawer';
 import Skeleton from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import { useToast } from '../components/ui/Toast';
+import {
+  ComputersIllustration,
+  NetworkingIllustration,
+  ElectronicsIllustration,
+  MeasuringInstrumentsIllustration,
+  SoftwareIllustration,
+  PeripheralsIllustration,
+  ComputerLabBanner,
+  NetworkingLabBanner,
+  ElectronicsLabBanner,
+  IoTLabBanner,
+  MechanicalLabBanner,
+  SadComputerIllustration,
+  FloppyEmptyIllustration,
+  OutOfOrderIllustration,
+  RetroTerminalArt
+} from '../assets';
 
 export default function DesignPreview() {
   const toast = useToast();
@@ -382,6 +399,114 @@ export default function DesignPreview() {
               </Button>
             }
           />
+        </div>
+      </section>
+
+      {/* 9. Retro Risograph & Halftone Imagery System */}
+      <section className="spec-sheet-panel">
+        <div className="panel-header">
+          <div className="panel-title">
+            <Sparkles size={15} color="var(--color-accent-orange)" />
+            <span>9. Retro Risograph Vector Illustrations & Duotone Filter Suite</span>
+          </div>
+          <Badge variant="orange">THEME PALETTE ONLY</Badge>
+        </div>
+        <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {/* Sub 1: Category Risograph SVGs */}
+          <div>
+            <div className="font-mono" style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.75rem', color: 'var(--color-text-secondary)' }}>
+              Category Vectors (2-3 Color Hand-Crafted Risograph SVGs)
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+              {[
+                { title: '1. Computers', comp: <ComputersIllustration width="100%" height="130px" /> },
+                { title: '2. Networking', comp: <NetworkingIllustration width="100%" height="130px" /> },
+                { title: '3. Electronics', comp: <ElectronicsIllustration width="100%" height="130px" /> },
+                { title: '4. Measuring & Dev', comp: <MeasuringInstrumentsIllustration width="100%" height="130px" /> },
+                { title: '5. Software & Licenses', comp: <SoftwareIllustration width="100%" height="130px" /> },
+                { title: '6. Peripherals & Fab', comp: <PeripheralsIllustration width="100%" height="130px" /> }
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    backgroundColor: 'var(--color-surface-subtle)',
+                    border: '1px solid var(--color-border-default)',
+                    borderRadius: 'var(--radius-xs)',
+                    padding: '0.65rem',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{ marginBottom: '0.5rem', overflow: 'hidden' }}>{item.comp}</div>
+                  <div className="font-mono" style={{ fontSize: '0.7rem', fontWeight: 700 }}>
+                    {item.title}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sub 2: Lab Theme Banners */}
+          <div>
+            <div className="font-mono" style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.75rem', color: 'var(--color-text-secondary)' }}>
+              Laboratory Facility Headers (Halftone & Risograph Banners)
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+              {[
+                { name: 'Computer Lab 1', comp: <ComputerLabBanner width="100%" height="100px" /> },
+                { name: 'Networking & Telecommunications', comp: <NetworkingLabBanner width="100%" height="100px" /> },
+                { name: 'Precision Electronics Lab', comp: <ElectronicsLabBanner width="100%" height="100px" /> },
+                { name: 'IoT & Embedded Systems Lab', comp: <IoTLabBanner width="100%" height="100px" /> },
+                { name: 'Mechanical & Rapid Prototyping Workshop', comp: <MechanicalLabBanner width="100%" height="100px" /> }
+              ].map((lab, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    backgroundColor: 'var(--color-surface-subtle)',
+                    border: '1px solid var(--color-border-default)',
+                    borderRadius: 'var(--radius-xs)',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div style={{ height: '100px' }}>{lab.comp}</div>
+                  <div className="font-mono" style={{ padding: '0.5rem 0.75rem', fontSize: 'var(--text-xs)', fontWeight: 700, borderTop: '1px solid var(--color-border-subtle)' }}>
+                    {lab.name}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sub 3: Empty State Illustrations & Login Art */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
+            <div>
+              <div className="font-mono" style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                Empty State Artworks
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                <div style={{ backgroundColor: 'var(--color-surface-subtle)', border: '1px solid var(--color-border-default)', borderRadius: 'var(--radius-xs)', padding: '0.5rem', textAlign: 'center' }}>
+                  <SadComputerIllustration width="100%" height="90px" />
+                  <div className="font-mono" style={{ fontSize: '0.65rem', fontWeight: 700, marginTop: '4px' }}>No Results</div>
+                </div>
+                <div style={{ backgroundColor: 'var(--color-surface-subtle)', border: '1px solid var(--color-border-default)', borderRadius: 'var(--radius-xs)', padding: '0.5rem', textAlign: 'center' }}>
+                  <FloppyEmptyIllustration width="100%" height="90px" />
+                  <div className="font-mono" style={{ fontSize: '0.65rem', fontWeight: 700, marginTop: '4px' }}>Zero Records</div>
+                </div>
+                <div style={{ backgroundColor: 'var(--color-surface-subtle)', border: '1px solid var(--color-border-default)', borderRadius: 'var(--radius-xs)', padding: '0.5rem', textAlign: 'center' }}>
+                  <OutOfOrderIllustration width="100%" height="90px" />
+                  <div className="font-mono" style={{ fontSize: '0.65rem', fontWeight: 700, marginTop: '4px' }}>Out of Order</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="font-mono" style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                Login Screen Retro Terminal
+              </div>
+              <div style={{ backgroundColor: 'var(--color-surface-subtle)', border: '1px solid var(--color-border-default)', borderRadius: 'var(--radius-xs)', padding: '0.5rem' }}>
+                <RetroTerminalArt width="100%" height="150px" />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
